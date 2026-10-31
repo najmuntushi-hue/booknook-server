@@ -1,4 +1,4 @@
-let jwks;
+﻿let jwks;
 
 const verifyToken = async (req, res, next) => {
   try {
@@ -15,6 +15,7 @@ const verifyToken = async (req, res, next) => {
     req.user = payload;
     next();
   } catch (error) {
+    console.error("JWT error:", error.message);
     res.status(401).send({ message: "Unauthorized: invalid token" });
   }
 };
