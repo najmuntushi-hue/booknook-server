@@ -1,4 +1,3 @@
-
 const dns = require("node:dns");
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 require("dotenv").config();
@@ -23,14 +22,30 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 let booksCollection;
 let borrowsCollection;
+let dbPromise;
 
-async function connectDB() {
-  await client.connect();
-  const db = client.db("booknook");
-  booksCollection = db.collection("books");
-  borrowsCollection = db.collection("borrows");
-  console.log("MongoDB connected");
+function getDB() {
+  if (!dbPromise) {
+    dbPromise = client.connect().then(() => {
+      const db = client.db("booknook");
+      booksCollection = db.collection("books");
+      borrowsCollection = db.collection("borrows");
+      console.log("MongoDB connected");
+    });
+  }
+  return dbPromise;
 }
+
+app.use(async (req, res, next) => {
+  try {
+    await getDB();
+    next();
+  } catch (error) {
+    dbPromise = null;
+    console.error("MongoDB connection failed:", error.message);
+    res.status(500).send({ message: "Database connection failed" });
+  }
+});
 
 app.get("/", (req, res) => {
   res.send("BookNook server is running");
@@ -51,7 +66,6 @@ app.get("/books", async (req, res) => {
   }
 });
 
-// GET /books/:id
 app.get("/books/:id", async (req, res) => {
   try {
     if (!ObjectId.isValid(req.params.id)) {
@@ -65,7 +79,6 @@ app.get("/books/:id", async (req, res) => {
   }
 });
 
-// POST /books
 app.post("/books", verifyToken, async (req, res) => {
   try {
     const { title, author, category, image, description, totalCopies } = req.body;
@@ -92,7 +105,6 @@ app.post("/books", verifyToken, async (req, res) => {
   }
 });
 
-// PATCH /books/:id
 app.patch("/books/:id", verifyToken, async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id);
@@ -112,7 +124,6 @@ app.patch("/books/:id", verifyToken, async (req, res) => {
   }
 });
 
-// DELETE /books/:id
 app.delete("/books/:id", verifyToken, async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id);
@@ -128,7 +139,6 @@ app.delete("/books/:id", verifyToken, async (req, res) => {
   }
 });
 
-// POST /borrows
 app.post("/borrows", verifyToken, async (req, res) => {
   try {
     const { bookId } = req.body;
@@ -169,7 +179,6 @@ app.post("/borrows", verifyToken, async (req, res) => {
   }
 });
 
-// GET /borrows
 app.get("/borrows", verifyToken, async (req, res) => {
   try {
     const borrows = await borrowsCollection
@@ -182,7 +191,6 @@ app.get("/borrows", verifyToken, async (req, res) => {
   }
 });
 
-// DELETE /borrows/:id
 app.delete("/borrows/:id", verifyToken, async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id);
@@ -200,14 +208,10 @@ app.delete("/borrows/:id", verifyToken, async (req, res) => {
   }
 });
 
-connectDB()
-  .then(() => {
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-    });
-  })
-  .catch((error) => {
-    console.error("MongoDB connection failed:", error.message);
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
   });
+}
 
 module.exports = app;
